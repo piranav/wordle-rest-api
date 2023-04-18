@@ -2,6 +2,7 @@ import boto3
 import json
 import logging
 import random
+import string
 from custom_encoder import CustomEncoder
 
 logger = logging.get_logger()
@@ -65,16 +66,22 @@ def startGame(number_of_letters):
     # Generate a random target word of the specified length
     wordlist = ['apple', 'banana', 'cherry', 'date', 'elder', 'fig', 'grape', 'hazel', 'indigo', 'juniper', 'kiwi', 'lemon', 'mango',
                 'nectar', 'orange', 'peach', 'quince', 'rasp', 'straw', 'tanger', 'ugli', 'vanilla', 'water', 'xigua', 'yellow', 'zucchini']
-    target_word = random.choice([w for w in wordlist if len(w) == num_letters])
 
-    # Create a new game record in DynamoDB
-    game_id = str(uuid.uuid4())
-    game_data = {'target_word': target_word, 'num_letters': num_letters,
-                 'guesses': [], 'remaining_turns': num_letters+1}
+    # Generate a random word with the specified number of letter
+    word = random.choice([w for w in wordlist if len(w) == num_letters])
+
+    # Create a new game in DynamoDB
+    game_id = random.randint(1, 1000000)
+    game_data = {
+        'word': word,
+        'remaining_turns': num_letters,
+        'guesses': []
+    }
     table.put_item(Item={'game_id': game_id, 'game_data': game_data})
 
     # Return the game ID
-    return {'game_id': game_id}
+    response_body = {'game_id': game_id}
+    return {'statusCode': 201, 'body': response_body}
 
 
 def saveGuess(event):
