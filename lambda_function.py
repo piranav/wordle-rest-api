@@ -1,12 +1,9 @@
 import boto3
 import json
-import logging
 import random
 import string
-from custom_encoder import CustomEncoder
+import logging
 
-logger = logging.get_logger()
-logger.setLevel(logging.INFO)
 
 dynamodbTableName = 'wordle-game'
 # Defining the dynamo cliet
@@ -23,46 +20,30 @@ guessPath = '/games/-game-id-/guess'
 
 
 def lambda_handler(event, context):
-    logger.info(event)
-    # Extracting the http method
-    httpMethod = event['httpMethod']
-    path = event['path']
+    try:
+        # Extracting the http method
+        httpMethod = event['httpMethod']
+        path = event['path']
 
-    # Takes the number of letters and creates a new game, returns the game id
-    if httpMethod == postMethod and path == gamesPath:
-        return startGame(json.loads(event['number_letters']))
-    # Takes the guess, returns the number of attempts left and the words present
-    elif httpMethod == postMethod and path == guessPath:
-        response = saveGuess(event)
+        # Takes the number of letters and creates a new game, returns the game id
+        if httpMethod == postMethod and path == gamesPath:
+            num_letters = json.loads(event['body'])
+            response_json = json.dumps(startGame(num_letters['num_letters']))
+            print(response_json)
+            return {'statusCode': 201, 'body': response_json}
 
-    # Takes the game_id and returns the number of attempts left and guesses
-    elif httpMethod == getMethod and path == gamesPath:
-        response = getGame(json.loads(event['game_id']))
-
-    else:
-        respose = buildResponse(404, 'Not Found')
-
-    return response
-
-
-def buildResponse(statusCode, body=None):
-    response = {
-        'statusCode': statusCode,
-        'headers': {
-            'Content-Type': 'application/json',
-            'Access-Controll-Allow-Origin': '*'
-        }
-    }
-
-    if body is not None:
-        response['body'] = json.dumps(body, cls=CustomEncoder)
-    return response
+        # Return a 404 error for any other request
+        return {'statusCode': 404, 'body': {'message': 'Resource not found'}}
+    except Exception as e:
+        # Log the error message
+        print(f'Error: {str(e)}')
+        # Return a 500 error with the error message
+        return {'statusCode': 500, 'body': {'message': 'Internal server error'}}
 
 
-def startGame(number_of_letters):
+def startGame(num_letters):
     # Parse the request body to get the number of letters
-    num_letters = int(number_of_letters)
-
+    num_letters = int(num_letters)
     # Generate a random target word of the specified length
     wordlist = ['apple', 'banana', 'cherry', 'date', 'elder', 'fig', 'grape', 'hazel', 'indigo', 'juniper', 'kiwi', 'lemon', 'mango',
                 'nectar', 'orange', 'peach', 'quince', 'rasp', 'straw', 'tanger', 'ugli', 'vanilla', 'water', 'xigua', 'yellow', 'zucchini']
@@ -71,17 +52,16 @@ def startGame(number_of_letters):
     word = random.choice([w for w in wordlist if len(w) == num_letters])
 
     # Create a new game in DynamoDB
-    game_id = random.randint(1, 1000000)
+    game_id = str(random.randint(1, 1000000))
     game_data = {
         'word': word,
-        'remaining_turns': num_letters,
+        'remaining_turns': int(num_letters)+1,
         'guesses': []
     }
     table.put_item(Item={'game_id': game_id, 'game_data': game_data})
 
     # Return the game ID
-    response_body = {'game_id': game_id}
-    return {'statusCode': 201, 'body': response_body}
+    return {'game_id': game_id}
 
 
 def saveGuess(event):
@@ -103,7 +83,7 @@ def saveGuess(event):
         return {'statusCode': 400, 'body': 'Game is already over'}
 
     # Check if the guessed word is the same as the target word
-    target_word = game_data['target_word']
+    target_word = game_data['word']
     if guessed_word == target_word:
         # If the guessed word is the same as the target word, mark it as correct
         feedback = 'correct'
@@ -130,7 +110,7 @@ def saveGuess(event):
     return {'statusCode': 200, 'body': feedback}
 
 
-def getGame(game_id):
+def getGame(event):
     # Parse the request parameters to get the game ID
     game_id = event['pathParameters']['game_id']
 
