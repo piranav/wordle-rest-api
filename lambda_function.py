@@ -18,7 +18,6 @@ postMethod = 'POST'
 
 gamesPath = '/games'
 game_idPath = '/games/-game-id-'
-
 guessPath = '/games/-game-id-/guess'
 
 
@@ -35,8 +34,9 @@ def lambda_handler(event, context):
     elif httpMethod == postMethod and path == guessPath:
         response = saveGuess(event)
 
+    # Takes the game_id and returns the number of attempts left and guesses
     elif httpMethod == getMethod and path == gamesPath:
-        response = buildResponse(200)
+        response = getGame(json.loads(event['game_id']))
 
     else:
         respose = buildResponse(404, 'Not Found')
@@ -121,3 +121,21 @@ def saveGuess(event):
 
     # Return the feedback for the guessed word
     return {'statusCode': 200, 'body': feedback}
+
+
+def getGame(game_id):
+    # Parse the request parameters to get the game ID
+    game_id = event['pathParameters']['game_id']
+
+    # Retrieve the game data from DynamoDB
+    response = table.get_item(Key={'game_id': game_id})
+    if 'Item' not in response:
+        return {'statusCode': 404, 'body': 'Game not found'}
+    game_data = response['Item']['game_data']
+
+    # Return the game status
+    response_body = {
+        'remaining_turns': game_data['remaining_turns'],
+        'guesses': game_data['guesses']
+    }
+    return {'statusCode': 200, 'body': response_body}
