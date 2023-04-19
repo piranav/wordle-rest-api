@@ -27,11 +27,13 @@ def lambda_handler(event, context):
 
         # Takes the number of letters and creates a new game, returns the game id
         if httpMethod == postMethod and path == gamesPath:
-            num_letters = json.loads(event['body'])
+            num_letters = json.loads(event['body'])['num_letters']
+            user_id = json.loads(event['body'])['user_id']
+            print(user_id, num_letters)
             # Checking if the number of letters falls in the desired range
-            if num_letters['num_letters'] in range(5, 9):
+            if int(num_letters) in range(5, 9):
                 response_json = json.dumps(
-                    startGame(num_letters['num_letters']))
+                    startGame(num_letters, user_id))
                 print(response_json)
                 return {'statusCode': 201, 'body': response_json}
             return {'statusCode': 400, 'body': 'Invalid word length'}
@@ -77,7 +79,7 @@ def lambda_handler(event, context):
         return {'statusCode': 500, 'body': {'message': 'Internal server error'}}
 
 
-def startGame(num_letters):
+def startGame(num_letters, user_id):
     # Parse the request body to get the number of letters
     num_letters = int(num_letters)
     # Generate a random target word of the specified length
@@ -87,23 +89,30 @@ def startGame(num_letters):
     # Generate a random word with the specified number of letter
     word = random.choice([w for w in wordlist if len(w) == num_letters])
 
-    # Create a new game in DynamoDB
-    game_id = str(random.randint(1, 1000000))
+    # Generates a unique game_id
+    temp_id = str(random.randint(1, 1000000))
+
+    while 'Item' in table.get_item(Key={'game_id': temp_id}):
+        temp_id = str(random.randint(1, 1000000))
+
+     # Create a new game in DynamoDB
     game_data = {
+        'user_id': user_id,
         'word': word,
         'remaining_turns': int(num_letters)+1,
         'guesses': []
     }
-    table.put_item(Item={'game_id': game_id, 'game_data': game_data})
+    table.put_item(Item={'game_id': temp_id, 'game_data': game_data})
 
     # Return the game ID
-    return {'game_id': game_id}
+    return {'game_id': temp_id}
 
 
 def getGame(response):
     game_data = response['Item']['game_data']
     # Return the game status
     response_body = {
+        'user_id': game_data['user_id'],
         'remaining_turns': game_data['remaining_turns'],
         'guesses': game_data['guesses']
     }
