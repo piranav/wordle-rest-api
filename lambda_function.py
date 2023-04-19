@@ -48,7 +48,25 @@ def lambda_handler(event, context):
 
             return {'statusCode': 404, 'body': 'Game not found'}
 
-            # print(response_json)
+        # Takes the game_id, guessed_word and returns the result based on the guessed_word
+        if httpMethod == postMethod and path == guessPath:
+            game_id = json.loads(event['body'])['game_id']
+            guessed_word = (json.loads(event['body'])['guessed_word']).lower()
+            response = table.get_item(Key={'game_id': game_id})
+
+            if 'Item' in response:
+                game_data = response['Item']['game_data']
+                print(game_data)
+                if not guessed_word.isalpha() or len(guessed_word) != len(game_data['word']):
+                    return {'statusCode': 400, 'body': 'Invalid guessed word'}
+                elif game_data['remaining_turns'] == 0:
+                    return {'statusCode': 400, 'body': 'Game over'}
+                response_body = saveGuess(game_data, guessed_word, game_id)
+                print(response_body)
+                response_json = json.dumps(response_body)
+                print(response_json)
+                return {'statusCode': 200, 'body': response_json}
+            return {'statusCode': 404, 'body': 'Game not found'}
 
         # Return a 404 error for any other request
         return {'statusCode': 404, 'body': {'message': 'Resource not found'}}
@@ -92,24 +110,7 @@ def getGame(response):
     return {'game_data': response_body}
 
 
-def saveGuess(event):
-    game_id = event['pathParameters']['game_id']
-    guessed_word = event['body']['guessed_word'].lower()
-
-    # Validate the guessed word
-    if not guessed_word.isalpha() or len(guessed_word) != 5:
-        return {'statusCode': 400, 'body': 'Invalid guessed word'}
-
-    # Retrieve the game data from DynamoDB
-    response = table.get_item(Key={'game_id': game_id})
-    if 'Item' not in response:
-        return {'statusCode': 404, 'body': 'Game not found'}
-    game_data = response['Item']['game_data']
-
-    # Check if the game is already over
-    if game_data['remaining_turns'] == 0:
-        return {'statusCode': 400, 'body': 'Game is already over'}
-
+def saveGuess(game_data, guessed_word, game_id):
     # Check if the guessed word is the same as the target word
     target_word = game_data['word']
     if guessed_word == target_word:
@@ -135,4 +136,4 @@ def saveGuess(event):
                       ExpressionAttributeValues={':game_data': game_data})
 
     # Return the feedback for the guessed word
-    return {'statusCode': 200, 'body': feedback}
+    return {'feedback': feedback}
