@@ -1,5 +1,5 @@
 import boto3
-import json
+import simplejson as json
 import random
 import string
 import logging
@@ -28,9 +28,27 @@ def lambda_handler(event, context):
         # Takes the number of letters and creates a new game, returns the game id
         if httpMethod == postMethod and path == gamesPath:
             num_letters = json.loads(event['body'])
-            response_json = json.dumps(startGame(num_letters['num_letters']))
-            print(response_json)
-            return {'statusCode': 201, 'body': response_json}
+            # Checking if the number of letters falls in the desired range
+            if num_letters['num_letters'] in range(5, 9):
+                response_json = json.dumps(
+                    startGame(num_letters['num_letters']))
+                print(response_json)
+                return {'statusCode': 201, 'body': response_json}
+            return {'statusCode': 400, 'body': 'Invalid word length'}
+
+        # Takes the game_id and returns the status of the game
+        if httpMethod == getMethod and path == game_idPath:
+            game_id = json.loads(event['body'])
+            response = table.get_item(Key={'game_id': game_id['game_id']})
+            if 'Item' in response:
+                response_body = getGame(response)
+                response_json = json.dumps(response_body)
+                print(response_json)
+                return {'statusCode': 200, 'body': response_json}
+
+            return {'statusCode': 404, 'body': 'Game not found'}
+
+            # print(response_json)
 
         # Return a 404 error for any other request
         return {'statusCode': 404, 'body': {'message': 'Resource not found'}}
@@ -62,6 +80,16 @@ def startGame(num_letters):
 
     # Return the game ID
     return {'game_id': game_id}
+
+
+def getGame(response):
+    game_data = response['Item']['game_data']
+    # Return the game status
+    response_body = {
+        'remaining_turns': game_data['remaining_turns'],
+        'guesses': game_data['guesses']
+    }
+    return {'game_data': response_body}
 
 
 def saveGuess(event):
@@ -108,21 +136,3 @@ def saveGuess(event):
 
     # Return the feedback for the guessed word
     return {'statusCode': 200, 'body': feedback}
-
-
-def getGame(event):
-    # Parse the request parameters to get the game ID
-    game_id = event['pathParameters']['game_id']
-
-    # Retrieve the game data from DynamoDB
-    response = table.get_item(Key={'game_id': game_id})
-    if 'Item' not in response:
-        return {'statusCode': 404, 'body': 'Game not found'}
-    game_data = response['Item']['game_data']
-
-    # Return the game status
-    response_body = {
-        'remaining_turns': game_data['remaining_turns'],
-        'guesses': game_data['guesses']
-    }
-    return {'statusCode': 200, 'body': response_body}
